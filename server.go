@@ -19,10 +19,17 @@ type Server struct {
 	portsCloseChan   chan struct{}
 	requestChan      chan *Request
 	function         [256](func(*Server, Framer) ([]byte, *Exception))
+	functionEx       [256](func(*Server, Framer, io.ReadWriteCloser) ([]byte, *Exception))
 	DiscreteInputs   []byte
 	Coils            []byte
 	HoldingRegisters []uint16
 	InputRegisters   []uint16
+
+	// 服务事件的回调，如连接、断开等
+	OnTcpConnect    func(conn net.Conn)
+	OnTcpDisconnect func(conn net.Conn, err error)
+	OnRtuConnect    func(port serial.Port)
+	OnRtuDisconnect func(port serial.Port, err error)
 }
 
 // Request contains the connection and Modbus frame.
@@ -64,6 +71,10 @@ func (s *Server) RegisterFunctionHandler(funcCode uint8, function func(*Server, 
 	s.function[funcCode] = function
 }
 
+func (s*Server)RegisterFunctionHandlerEx(funcCode uint8, function func(*Server, Framer, io.ReadWriteCloser) ([]byte, *Exception)) {
+	s.functionEx[funcCode] = function
+}
+
 func (s *Server) handle(request *Request) Framer {
 	var exception *Exception
 	var data []byte
@@ -73,6 +84,9 @@ func (s *Server) handle(request *Request) Framer {
 	function := request.frame.GetFunction()
 	if s.function[function] != nil {
 		data, exception = s.function[function](s, request.frame)
+		response.SetData(data)
+	} else if s.functionEx[function] != nil {
+		data, exception = s.functionEx[function](s, request.frame, request.conn)
 		response.SetData(data)
 	} else {
 		exception = &IllegalFunction

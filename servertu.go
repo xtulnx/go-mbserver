@@ -19,6 +19,11 @@ func (s *Server) ListenRTU(serialConfig *serial.Config) (err error) {
 	s.portsWG.Add(1)
 	go func() {
 		defer s.portsWG.Done()
+
+		if s.OnRtuConnect != nil {
+			s.OnRtuConnect(port)
+		}
+
 		s.acceptSerialRequests(port)
 	}()
 
@@ -38,6 +43,9 @@ func (s *Server) acceptSerialRequests(port serial.Port) {
 
 		bytesRead, err := port.Read(buffer)
 		if err != nil {
+			if s.OnRtuDisconnect != nil {
+				s.OnRtuDisconnect(port, err)
+			}
 			if err != io.EOF {
 				log.Printf("serial read error %v\n", err)
 			}

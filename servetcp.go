@@ -19,6 +19,10 @@ func (s *Server) accept(listen net.Listener) error {
 			return err
 		}
 
+		if s.OnTcpConnect != nil {
+			s.OnTcpConnect(conn)
+		}
+
 		go func(conn net.Conn) {
 			defer conn.Close()
 
@@ -26,6 +30,9 @@ func (s *Server) accept(listen net.Listener) error {
 				packet := make([]byte, 512)
 				bytesRead, err := conn.Read(packet)
 				if err != nil {
+					if s.OnTcpDisconnect != nil {
+						s.OnTcpDisconnect(conn, err)
+					}
 					if err != io.EOF {
 						log.Printf("read error %v\n", err)
 					}
